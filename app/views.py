@@ -23,6 +23,12 @@ auth = HTTPBasicAuth()
 
 
 
+def validate_alphanumeric(s):
+    return re.search('\W+', s) == None
+    
+def validate_alphanumeric_with_allowed(s):
+    return re.search("[;=[\\]^_`|]",s) == None
+
 @auth.verify_password
 def verify_password(username_or_token, password):
     user = models.User.verify_auth_token(username_or_token)
@@ -100,6 +106,13 @@ def create_job(modelname):
         abort(400)
     user = db_utils.get_user_or_return(username)
     model = db_utils.get_model_or_return(user, modelname)
+
+    # Make sure there's no funny business
+    for k,v in request.data.iteritems():
+        if validate_alphanumeric_with_allowed(k) and validate_alphanumeric_with_allowed(v):
+            continue
+        else:
+            abort(400)
 
     params = request.data
     jid, jout, jerr = remote.submit_remote_job(model, username, params)
