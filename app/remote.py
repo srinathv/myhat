@@ -22,7 +22,7 @@ def submit_remote_job(mod, username, params):
 	# Look up job information
 	job.wall_time_limit   = 5 # minutes
 	job.total_cpu_count   = 12 
-	job.queue             = "janus-admin"
+	# job.queue             = "janus-admin" # NOT USED WITH SLURM
 	job.output            = mod.name + '.' + job_id + '.out'
 	job.error             = mod.name + '.' + job_id + '.err'
 	job.executable        = mod.cmd
@@ -59,13 +59,13 @@ def get_job_ouput(job):
 
 	out.copy(target)
 
-	while not os.path.exists(tmp_):
-		time.sleep(1)
+	# while not os.path.exists(tmp_):
+	# 	time.sleep(1)
 
-	with open(tmp_, 'r') as infile:
+	with open(target, 'r') as infile:
 		data = infile.read()
 
-	os.remove(tmp_)
+	# os.remove(tmp_)
 	return data
 
 
