@@ -4,20 +4,20 @@ import re
 import random
 import time
 
-def submit_remote_job(mod, params):
+def submit_remote_job(mod, username, params):
 
-	ctx = saga.Context("ssh")
-	ctx.user_id = 'molu8455'
+	ctx = saga.Context("UserPass")
+	ctx.user_id = username
 
 	session = saga.Session()
 	session.add_context(ctx)
 
-	service = saga.job.Service("pbs+ssh://login",session=session)
+	service = saga.job.Service("slurm://localhost",session=session)
 
 	# job info from database...
 	job_id = 'saga.'+str(random.randint(10000,90000))
 	job = saga.job.Description()
-	job.working_directory = "/lustre/janus_scratch/molu8455/webapi"
+	job.working_directory = "/lustre/janus_scratch/%s/webapi"%username
 	
 	# Look up job information
 	job.wall_time_limit   = 5 # minutes
@@ -41,20 +41,21 @@ def submit_remote_job(mod, params):
 
 def get_job_ouput(job):
 
-	ctx = saga.Context("ssh")
-	ctx.user_id = 'molu8455'
+	ctx = saga.Context("UserPass")
+	ctx.user_id = username
 
 	session = saga.Session()
 	session.add_context(ctx)
 	print job.output
-	output = 'sftp://login' + job.output 
-	tmp_ = '/Users/mlunacek/projects/myhat/app/tmp/tmp.output'
-	target = 'file://localhost' + tmp_
+	# output = 'sftp://localhost' + job.output 
+	# tmp_ = '/Users/mlunacek/projects/myhat/app/tmp/tmp.output'
+	# target = 'file://localhost' + tmp_
+	target = os.path.join(job.working_directory,job.output)
 
 
 	out = saga.filesystem.File(output, session=session)
 	if out is None:
-		return '\nFile does not exists yet\n'
+		return '\nFile does not exist yet\n'
 
 	out.copy(target)
 
