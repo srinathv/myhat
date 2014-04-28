@@ -10,7 +10,6 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key = True)
 
     username = db.Column(db.String(32), index=True)
-    password_hash = db.Column(db.String(64))
 
     name = db.Column(db.String(64), unique = True)
     email = db.Column(db.String(120), unique = True)
@@ -18,16 +17,6 @@ class User(db.Model):
 
     def __repr__(self):
         return '<User %r>' % (self.name)
-
-    def hash_password(self, password):
-        self.password_hash = pwd_context.encrypt(password)
-
-    def verify_password(self, password):
-        return pwd_context.verify(password, self.password_hash)
-
-    def generate_auth_token(self, expiration=600):
-        s = Serializer(app.config['SECRET_KEY'], expires_in=expiration)
-        return s.dumps({'id': self.id})
 
     @staticmethod
     def verify_auth_token(token):
@@ -38,7 +27,7 @@ class User(db.Model):
             return None    # valid token, but expired
         except BadSignature:
             return None    # invalid token
-        user = User.query.get(data['id'])
+        user = User.query.filter_by(username=data['username']).first()
         return user
 
 class Model(db.Model):
