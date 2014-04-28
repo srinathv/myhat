@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div>
+<a href='/'>home</a> /
+<a href='/{{user.name}}'>{{user.name}}</a> / models /
+{{mod.name}}
+</div>
+
+<h1>{{user.name}}</h1>
+<h2>{{mod.name}}</h2>
+
+{% for mod in mods %}
+<div><a href='/{{user.name}}/models/{{mod.name}}'>{{mod.name}}</a></div>
+{% endfor %}
+{% endblock %}
+
