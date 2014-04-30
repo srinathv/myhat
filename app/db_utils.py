@@ -1,4 +1,5 @@
-from flask import jsonify 
+from flask import jsonify
+from flask import abort
 from app import app, db, models, remote
 
 
@@ -13,7 +14,7 @@ def database_add(x):
 
 
 def get_user_or_return(username):
-    user_ = models.User.query.filter_by(name=username).first()
+    user_ = models.User.query.filter_by(username=username).first()
     if user_ is None:
         abort(404)
     return user_

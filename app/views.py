@@ -13,7 +13,7 @@ from flask import g
 from flask.ext.restful import Api, Resource, reqparse
 
 from app import app, db, models, remote
-from db_utils import *
+import db_utils
 import json
 import re
 import os
@@ -80,8 +80,9 @@ def get_resource():
 @app.route('/api/job/<string:modelname>', methods=['GET'])
 @auth.login_required
 def read_jobs(modelname):
-    if username != g.user.username:
+    if not g.user.username:
         abort(400)
+    username = g.user.username
     user = get_user_or_return(username)
     model = get_model_or_return(user, modelname)
     jobs = get_jobs_or_return(user, model)
@@ -90,8 +91,9 @@ def read_jobs(modelname):
 @app.route('/api/job/<string:modelname>/<int:job_id>', methods=['GET'])
 @auth.login_required
 def read_job(modelname,job_id):
-    if username != g.user.username:
+    if not g.user.username:
         abort(400)
+    username = g.user.username
     user = db_utils.get_user_or_return(username)
     model = db_utils.get_model_or_return(user, modelname)
     job = db_utils.get_job_or_return(user, model, job_id)
@@ -102,19 +104,23 @@ def read_job(modelname,job_id):
 @app.route('/api/job/<string:modelname>', methods=['POST'])
 @auth.login_required
 def create_job(modelname):
-    if username != g.user.username:
+    # import pdb; pdb.set_trace()
+    if not g.user.username:
         abort(400)
+    username = g.user.username
     user = db_utils.get_user_or_return(username)
     model = db_utils.get_model_or_return(user, modelname)
 
-    # Make sure there's no funny business
-    for k,v in request.data.iteritems():
-        if validate_alphanumeric_with_allowed(k) and validate_alphanumeric_with_allowed(v):
-            continue
-        else:
-            abort(400)
+    params = {}
+    if request.data:
+        # Make sure there's no funny business
+        for k,v in json.loads( request.data.iteritems() ):
+            if validate_alphanumeric_with_allowed(k) and validate_alphanumeric_with_allowed(v):
+                continue
+            else:
+                abort(400)
 
-    params = request.data
+        params = request.data
     jid, jout, jerr = remote.submit_remote_job(model, username, params)
 
     job = models.Job(id=jid,

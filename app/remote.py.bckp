@@ -19,26 +19,43 @@ def submit_remote_job(mod, username, params):
 	job_id = 'saga.'+str(random.randint(10000,90000))
 	job = saga.job.Description()
 	job.working_directory = "/lustre/janus_scratch/%s/webapi"%username
-
+	
 	# Look up job information
 	job.wall_time_limit   = 5 # minutes
 	job.total_cpu_count   = 12 
-	job.queue             = "debug"
+	job.queue             = "janus-admin"
 	job.output            = mod.name + '.' + job_id + '.out'
 	job.error             = mod.name + '.' + job_id + '.err'
 	job.executable        = mod.cmd
 	job.arguments         = params
 
-	touchjob = service.create_job(job)
-	touchjob.run()
+        read_pipe, write_pipe = os.pipe()
+        pid = os.fork()
+        if pid:
+            os.close(write_pipe)
+            r = os.fdopen(read_pipe)
+            output = r.read()
+            os.waitpid(pid, 0)
+            jid, jout, jerr = [ o for o in output.split(',') ]
+            return jid, jout, jerr
+        else:
+            print os.getuid()
+            os.close(read_pipe)
+            w = os.fdopen(write_pipe, 'w')
+	    euid = int(pwd.getpwnam(username)[2])
+            os.seteuid(euid)
 
-	jid = re.findall(r'\[([0-9]+)\]', touchjob.get_id())[0]
-	jout = os.path.join(job.working_directory,job.output)
-	jerr = os.path.join(job.working_directory,job.error)
+	    touchjob = service.create_job(job)
+	    touchjob.run()
 
-	service.close()
+	    jid = re.findall(r'\[([0-9]+)\]', touchjob.get_id())[0]
+	    jout = os.path.join(job.working_directory,job.output)
+	    jerr = os.path.join(job.working_directory,job.error)
 
-	return jid, jout, jerr
+	    service.close()
+            w.write("%s,%s,%s"%(jid,jout,jerr))
+            w.close()
+            sys.exit(0)
 
 def get_job_ouput(job):
 
