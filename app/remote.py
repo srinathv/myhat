@@ -1,153 +1,173 @@
 import saga
 import os
+import sys
 import re
 import random
 import time
 import pwd
 
 def submit_remote_job(mod, username, params):
+    read_pipe, write_pipe = os.pipe()
+    pid = os.fork()
+    if pid:
+        os.close(write_pipe)
+        r = os.fdopen(read_pipe)
+        os.waitpid(pid,0)
+        output = r.read()
+        jid, jout, jerr = [ o for o in output.split(',') ]
+        return jid, jout, jerr
+    else:
+        print os.getuid()
+        os.close(read_pipe)
+        w = os.fdopen(write_pipe, 'w')
+        euid = int(pwd.getpwnam(username)[2])
+        os.setuid(euid)
+        print os.getuid()
+        
+        ctx = saga.Context("UserPass")
+        ctx.user_id = username
+        
+        session = saga.Session()
+        session.add_context(ctx)
+        
+        service = saga.job.Service("slurm://localhost",session=session)
+        
+        # job info from database...
+        job_id = 'saga.'+str(random.randint(10000,90000))
+        job = saga.job.Description()
+        job.working_directory = "/lustre/janus_scratch/%s/webapi"%username
+        
+        # Look up job information
+        job.wall_time_limit   = 5 # minutes
+        job.total_cpu_count   = 12 
+        job.queue             = "debug"
+        job.output            = mod.name + '.' + job_id + '.out'
+        job.error             = mod.name + '.' + job_id + '.err'
+        job.executable        = mod.cmd
+        if params != {}:
+            job.arguments         = params
+        
+        touchjob = service.create_job(job)
+        touchjob.run()
 
-	ctx = saga.Context("UserPass")
-	ctx.user_id = username
+        jid = re.findall(r'\[([0-9]+)\]', touchjob.get_id())[0]
+        jout = os.path.join(job.working_directory,job.output)
+        jerr = os.path.join(job.working_directory,job.error)
 
-	session = saga.Session()
-	session.add_context(ctx)
-
-	service = saga.job.Service("slurm://localhost",session=session)
-
-	# job info from database...
-	job_id = 'saga.'+str(random.randint(10000,90000))
-	job = saga.job.Description()
-	job.working_directory = "/lustre/janus_scratch/%s/webapi"%username
-
-	# Look up job information
-	job.wall_time_limit   = 5 # minutes
-	job.total_cpu_count   = 12 
-	job.queue             = "debug"
-	job.output            = mod.name + '.' + job_id + '.out'
-	job.error             = mod.name + '.' + job_id + '.err'
-	job.executable        = mod.cmd
-	job.arguments         = params
-
-	touchjob = service.create_job(job)
-	touchjob.run()
-
-	jid = re.findall(r'\[([0-9]+)\]', touchjob.get_id())[0]
-	jout = os.path.join(job.working_directory,job.output)
-	jerr = os.path.join(job.working_directory,job.error)
-
-	service.close()
-
-	return jid, jout, jerr
+        service.close()
+        print jid,jout,jerr
+        w.write("%s,%s,%s"%(jid,jout,jerr))
+        w.close()
+        os._exit(0)
 
 def get_job_ouput(job):
 
-	ctx = saga.Context("UserPass")
-	ctx.user_id = username
+    # ctx = saga.Context("UserPass")
+    # ctx.user_id = username
 
-	session = saga.Session()
-	session.add_context(ctx)
-	print job.output
-	# output = 'sftp://localhost' + job.output 
-	# tmp_ = '/Users/mlunacek/projects/myhat/app/tmp/tmp.output'
-	# target = 'file://localhost' + tmp_
-	target = os.path.join(job.working_directory,job.output)
-
-
-	out = saga.filesystem.File(output, session=session)
-	if out is None:
-		return '\nFile does not exist yet\n'
-
-	out.copy(target)
-
-	# while not os.path.exists(tmp_):
-	# 	time.sleep(1)
-
-	with open(target, 'r') as infile:
-		data = infile.read()
-
-	# os.remove(tmp_)
-	return data
+    session = saga.Session()
+    # session.add_context(ctx)
+    print job.output
+    # output = 'sftp://localhost' + job.output 
+    # tmp_ = '/Users/mlunacek/projects/myhat/app/tmp/tmp.output'
+    # target = 'file://localhost' + tmp_
+    target = job.output
 
 
-	    #return jsonify( {'success': 'True'} )
-	# except:
-	# 	print 'fail'
+    # out = saga.filesystem.File(output, session=session)
+    # if out is None:
+    #     return '\nFile does not exist yet\n'
 
-	    #return jsonify( {'success': 'False'} )
-	# print "Job State   : %s" % (touchjob.state)
-	# print "Exitcode    : %s" % (touchjob.exit_code)
-	# # print "output      : %s" % (touchjob.output)
-	# print 'id          : %s' % (touchjob.get_id())
+    # out.copy(target)
 
-	# print 'output      : %s' % (job.output)
-	# print 'error       : %s' % (job.error)
-	# print ' '.join(job.arguments)
-	# print job.executable
+    # while not os.path.exists(tmp_):
+    #     time.sleep(1)
 
-	# print re.findall(r'\[([0-9]+)\]', touchjob.get_id())[0]
-	# print os.path.join(job.working_directory,job.output)
+    with open(target, 'r') as infile:
+        data = infile.read()
 
-	
+    # os.remove(tmp_)
+    return data
+
+
+        #return jsonify( {'success': 'True'} )
+    # except:
+    #     print 'fail'
+
+        #return jsonify( {'success': 'False'} )
+    # print "Job State   : %s" % (touchjob.state)
+    # print "Exitcode    : %s" % (touchjob.exit_code)
+    # # print "output      : %s" % (touchjob.output)
+    # print 'id          : %s' % (touchjob.get_id())
+
+    # print 'output      : %s' % (job.output)
+    # print 'error       : %s' % (job.error)
+    # print ' '.join(job.arguments)
+    # print job.executable
+
+    # print re.findall(r'\[([0-9]+)\]', touchjob.get_id())[0]
+    # print os.path.join(job.working_directory,job.output)
+
+    
 
 
 
 
 # def execute_remote_command(user_id, job_name):
 
-# 	ctx = saga.Context("ssh")
-# 	ctx.user_id = user_id
+#     ctx = saga.Context("ssh")
+#     ctx.user_id = user_id
 
-# 	session = saga.Session()
-# 	session.add_context(ctx)
+#     session = saga.Session()
+#     session.add_context(ctx)
 
-# 	service = saga.job.Service("ssh://login",session=session)
+#     service = saga.job.Service("ssh://login",session=session)
 
-# 	job = saga.job.Description()
-# 	job.working_directory = "$HOME"
-	
+#     job = saga.job.Description()
+#     job.working_directory = "$HOME"
+    
 
-# 	# Look up job information
-# 	job.output            = user_id + '.' + job_name + '.out'
-# 	job.error             = user_id + '.' + job_name + '.err'
-# 	job.executable        = 'showq'
-# 	job.arguments         = ['-u', ctx.user_id]
+#     # Look up job information
+#     job.output            = user_id + '.' + job_name + '.out'
+#     job.error             = user_id + '.' + job_name + '.err'
+#     job.executable        = 'showq'
+#     job.arguments         = ['-u', ctx.user_id]
 
 
-# 	touchjob = service.create_job(job)
-# 	print "Job State   : %s" % (touchjob.state)
-# 	print "Exitcode    : %s" % (touchjob.exit_code)
-# 	touchjob.run()
+#     touchjob = service.create_job(job)
+#     print "Job State   : %s" % (touchjob.state)
+#     print "Exitcode    : %s" % (touchjob.exit_code)
+#     touchjob.run()
 
-# 	print "Job State   : %s" % (touchjob.state)
-# 	print "Exitcode    : %s" % (touchjob.exit_code)
+#     print "Job State   : %s" % (touchjob.state)
+#     print "Exitcode    : %s" % (touchjob.exit_code)
 
-# 	touchjob.wait()
+#     touchjob.wait()
 
-# 	print "Job State   : %s" % (touchjob.state)
-# 	print "Exitcode    : %s" % (touchjob.exit_code)
+#     print "Job State   : %s" % (touchjob.state)
+#     print "Exitcode    : %s" % (touchjob.exit_code)
 
-	# dir = saga.namespace.Directory("sftp://login/home/molu8455")
-	# data = dir.open('examplejob.out')
-	# print data
-	# print data.get_size()
-	# data.close()
-	# dir.close()
+    # dir = saga.namespace.Directory("sftp://login/home/molu8455")
+    # data = dir.open('examplejob.out')
+    # print data
+    # print data.get_size()
+    # data.close()
+    # dir.close()
 
-	# outfilesource = 'sftp://login/home/molu8455/' + job.output 
-	# tmp_ = '/Users/mlunacek/projects/myhat/app/tmp/' + job.output
-	# outfiletarget = 'file://localhost/' + tmp_
-	# out = saga.filesystem.File(outfilesource, session=session)
-	# out.copy(outfiletarget)
+    # outfilesource = 'sftp://login/home/molu8455/' + job.output 
+    # tmp_ = '/Users/mlunacek/projects/myhat/app/tmp/' + job.output
+    # outfiletarget = 'file://localhost/' + tmp_
+    # out = saga.filesystem.File(outfilesource, session=session)
+    # out.copy(outfiletarget)
 
-	# while not os.path.exists(tmp_):
-	# 	time.sleep(1)
+    # while not os.path.exists(tmp_):
+    #     time.sleep(1)
 
-	# with open(tmp_, 'r') as infile:
-	# 	data = infile.read()
-	# print data
+    # with open(tmp_, 'r') as infile:
+    #     data = infile.read()
+    # print data
 
-	# service.close()
+    # service.close()
 
 
 

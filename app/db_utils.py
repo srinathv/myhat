@@ -21,7 +21,7 @@ def get_user_or_return(username):
 
 
 def get_model_or_return(user, modelname):
-    mod_ = models.Model.query.filter_by(user_id=user.id).first()
+    mod_ = models.Model.query.filter_by(user_id=user.id,name=modelname).first()
     if mod_ is None:
         abort(404)
     return mod_
